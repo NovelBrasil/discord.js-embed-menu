@@ -1,12 +1,12 @@
 import { EventEmitter } from 'events';
-import { TextChannel, User, Message, MessageEmbed, PermissionString, MessageReaction, ReactionCollector, Collection } from 'discord.js';
+import { TextChannel, User, Message, EmbedBuilder, PermissionsString, MessageReaction, ReactionCollector, Collection, ChannelType } from 'discord.js';
 
 import { DiscordEmbedMenuPage } from './discord_embed_menu_page';
 
 export class DiscordEmbedMenu extends EventEmitter {
 
-    private static readonly REQUIRED_PERMS: PermissionString[] = ['SEND_MESSAGES', 'EMBED_LINKS', 'ADD_REACTIONS', 'MANAGE_MESSAGES'];
-    private static LOADING_MESSAGE: string = 'Loading, please be patient...';
+    private static readonly REQUIRED_PERMS: PermissionsString[] = ['SendMessages', 'EmbedLinks', 'AddReactions', 'ManageMessages'];
+    private static LOADING_MESSAGE: string = 'Carregando, por favor seja paciente...';
 
     public channel: TextChannel;
     public user: User;
@@ -38,7 +38,7 @@ export class DiscordEmbedMenu extends EventEmitter {
         this.keepUserReactionOnStop = keepUserReactionOnStop;
         this.loadingMessage = loadingMessage ? loadingMessage : DiscordEmbedMenu.LOADING_MESSAGE;
 
-        this.isDM = !this.channel || this.channel.type === ('dm' as 'text');
+        this.isDM = !this.channel || this.channel.type !== ChannelType.GuildText;
         this.userTag = '<@' + this.user.id + '>';
 
         this.pages = [];
@@ -51,10 +51,10 @@ export class DiscordEmbedMenu extends EventEmitter {
 
         if (!this.isDM) {
             if (this.channel.client.user) {
-                let missingPerms: PermissionString[] = [];
+                let missingPerms: PermissionsString[] = [];
                 let clientPermissions = this.channel.permissionsFor(this.channel.client.user);
                 if (clientPermissions) {
-                    if (!clientPermissions.has('ADMINISTRATOR')) {
+                    if (!clientPermissions.has('Administrator')) {
                         DiscordEmbedMenu.REQUIRED_PERMS.forEach((permission) => {
                             if (!clientPermissions || clientPermissions.has(permission)) {
                                 missingPerms.push(permission);
@@ -80,7 +80,7 @@ export class DiscordEmbedMenu extends EventEmitter {
     public async stop(): Promise<void | Message> {
         this.stopReactions(false);
         if (this.menu && this.keepUserReactionOnStop) {
-            this.menu.reactions.cache.array().forEach(async (reaction: MessageReaction) => {
+            this.menu.reactions.cache.forEach(async (reaction: MessageReaction) => {
                 if (this.menu && this.menu.client && this.menu.client.user) {
                     await reaction.users.remove(this.menu.client.user.id);
                 }
@@ -120,8 +120,8 @@ export class DiscordEmbedMenu extends EventEmitter {
         this.currentPage = this.pages[this.pageIndex];
 
         let content = (!this.isDM && this.mention ? this.userTag : '');
-        let loadingEmbed = new MessageEmbed({
-            title: this.currentPage.content.title as string,
+        let loadingEmbed = new EmbedBuilder({
+            title: this.currentPage.content.data.title as string,
             description: this.loadingMessage
         });
 
@@ -131,16 +131,16 @@ export class DiscordEmbedMenu extends EventEmitter {
                 this.menu = null;
             }
             if (this.channel) {
-                this.menu = await this.channel.send(content, { embed: loadingEmbed });
+                this.menu = await this.channel.send({ content, embeds: [loadingEmbed] });
             } else {
-                this.menu = await this.user.send(content, { embed: loadingEmbed });
+                this.menu = await this.user.send({ content, embeds: [loadingEmbed] });
                 this.channel = this.menu.channel as TextChannel;
             }
         } else {
             if (this.menu) {
-                await this.menu.edit(content, { embed: loadingEmbed });
+                await this.menu.edit({ content, embeds: [loadingEmbed] });
             } else {
-                this.menu = await this.channel.send(content, { embed: loadingEmbed });
+                this.menu = await this.channel.send({ content, embeds: [loadingEmbed] });
             }
         }
 
@@ -148,7 +148,7 @@ export class DiscordEmbedMenu extends EventEmitter {
         await this.addReactions();
         this.awaitReactions();
 
-        await this.menu.edit(content, { embed: this.currentPage.content });
+        await this.menu.edit({content, embeds: [this.currentPage.content] });
 
         this.emit('page-changed', this.pageIndex, this.currentPage);
     }
@@ -175,9 +175,10 @@ export class DiscordEmbedMenu extends EventEmitter {
 
     private awaitReactions() {
         if (this.menu) {
-            this.reactionCollector = this.menu.createReactionCollector((_reaction: MessageReaction, user: User): boolean => {
+            const filter = (_reaction: MessageReaction, user: User): boolean => {
                 return this.menu != null && this.menu.client != null && this.menu.client.user != null && user.id != this.menu.client.user.id;
-            }, this.timeout ? { idle: this.timeout } : undefined);
+            }
+            this.reactionCollector = this.menu.createReactionCollector({ filter, time: this.timeout });
     
             let reactionsChanged: boolean;
             this.reactionCollector.on('end', (reactions: Collection<string, MessageReaction>) => {
@@ -186,7 +187,7 @@ export class DiscordEmbedMenu extends EventEmitter {
                         if (reactionsChanged) {
                             return this.clearReactions();
                         } else if (this.menu) {
-                            reactions.array()[0].users.remove(this.menu.client.users.cache.get(this.user.id));
+                            reactions.at(0)?.users.remove(this.menu.client.users.cache.get(this.user.id));
                         }
                     } else if (this.deleteOnTimeout) {
                         return this.delete();
@@ -197,7 +198,7 @@ export class DiscordEmbedMenu extends EventEmitter {
             })
     
             this.reactionCollector.on('collect', (reaction: MessageReaction, user: User) => {
-                const reactionName = Object.prototype.hasOwnProperty.call(this.currentPage.reactions, reaction.emoji.name)
+                const reactionName = Object.prototype.hasOwnProperty.call(this.currentPage.reactions, reaction.emoji.name as string)
                     ? reaction.emoji.name
                     : Object.prototype.hasOwnProperty.call(this.currentPage.reactions, reaction.emoji.id as string) ? reaction.emoji.id : null;
     
@@ -215,25 +216,25 @@ export class DiscordEmbedMenu extends EventEmitter {
     
                     switch (this.currentPage.reactions[reactionName]) {
                         case 'first': {
-                            reactionsChanged = JSON.stringify(this.menu.reactions.cache.keyArray()) != JSON.stringify(Object.keys(this.pages[0].reactions));
+                            reactionsChanged = JSON.stringify(this.menu.reactions.cache.keys()) != JSON.stringify(Object.keys(this.pages[0].reactions));
                             this.setPage(0);
                             break;
                         }
                         case 'last': {
-                            reactionsChanged = JSON.stringify(this.menu.reactions.cache.keyArray()) != JSON.stringify(Object.keys(this.pages[this.pages.length - 1].reactions));
+                            reactionsChanged = JSON.stringify(this.menu.reactions.cache.keys()) != JSON.stringify(Object.keys(this.pages[this.pages.length - 1].reactions));
                             this.setPage(this.pages.length - 1);
                             break;
                         }
                         case 'previous': {
                             if (this.pageIndex > 0) {
-                                reactionsChanged = JSON.stringify(this.menu.reactions.cache.keyArray()) != JSON.stringify(Object.keys(this.pages[this.pageIndex - 1].reactions));
+                                reactionsChanged = JSON.stringify(this.menu.reactions.cache.keys()) != JSON.stringify(Object.keys(this.pages[this.pageIndex - 1].reactions));
                                 this.setPage(this.pageIndex - 1);
                             }
                             break;
                         }
                         case 'next': {
                             if (this.pageIndex < this.pages.length - 1) {
-                                reactionsChanged = JSON.stringify(this.menu.reactions.cache.keyArray()) != JSON.stringify(Object.keys(this.pages[this.pageIndex + 1].reactions));
+                                reactionsChanged = JSON.stringify(this.menu.reactions.cache.keys()) != JSON.stringify(Object.keys(this.pages[this.pageIndex + 1].reactions));
                                 this.setPage(this.pageIndex + 1);
                             }
                             break;
@@ -247,7 +248,7 @@ export class DiscordEmbedMenu extends EventEmitter {
                             break;
                         }
                         default: {
-                            reactionsChanged = JSON.stringify(this.menu.reactions.cache.keyArray()) != JSON.stringify(Object.keys(this.pages.find(p => p.name === this.currentPage.reactions[reactionName]).reactions));
+                            reactionsChanged = JSON.stringify(this.menu.reactions.cache.keys()) != JSON.stringify(Object.keys(this.pages.find(p => p.name === this.currentPage.reactions[reactionName]).reactions));
                             this.setPage(this.pages.findIndex(p => p.name === this.currentPage.reactions[reactionName]));
                             break;
                         }
