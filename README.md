@@ -1,13 +1,11 @@
 <div align="center">
   <p>
-    <a href="https://github.com/eilex/discord.js-embed-menu"><img src="https://img.shields.io/npm/v/discord.js-embed-menu" alt="NPM version" /></a>
-    <a href="https://discord.js.org"><img src="https://img.shields.io/npm/dependency-version/discord.js-embed-menu/discord.js" alt="NPM (prod) dependency version" /></a>
-    <a href="https://nodei.co/npm/discord.js-embed-menu"><img src="https://img.shields.io/npm/dt/discord.js-embed-menu" alt="NPM downloads" /></a>
-    <a href="https://nodei.co/npm/discord.js-embed-menu"><img src="https://img.shields.io/npm/dw/discord.js-embed-menu" alt="NPM downloads week" /></a>
+    <a href="https://github.com/NovelBrasil/discord.js-embed-menu"><img src="https://img.shields.io/npm/v/@novelbrasil/discord.js-embed-menu" alt="NPM version" /></a>
+    <a href="https://discord.js.org"><img src="https://img.shields.io/npm/dependency-version/@novelbrasil/discord.js-embed-menu/discord.js" alt="NPM (prod) dependency version" /></a>
     
   </p>
   <p>
-    <a href="https://nodei.co/npm/discord.js-embed-menu/"><img src="https://nodei.co/npm/discord.js-embed-menu.png?downloads=true&stars=true" alt="npm installnfo" /></a>
+    <a href="https://nodei.co/npm/@novelbrasil/discord.js-embed-menu/"><img src="https://nodei.co/npm/@novelbrasil/discord.js-embed-menu?downloads=true&stars=true" alt="npm installnfo" /></a>
   </p>
 </div>
 
@@ -22,24 +20,30 @@
 
 ## About
 
-discord.js-embed-menu is a [Node.js](https://nodejs.org) module based on [discord.js-menu](https://github.com/jowsey/discord.js-menu) that allows you to easily create reaction embeds menu using
-[discord.js](https://discord.js.org/#/).
+This discord.js-embed-menu is a fork of the [original repository](https://github.com/eilex/discord.js-embed-menu). This version features support for components in addition to working for recent versions of [discord.js](https://discord.js.org/)
 
 - Channel and direct message menu
 - Remove other users reactions
 - Pagination system
 - Mention user
 - Timeout and auto delete
+- Support to followUp and reply interaction
+- Support to button component
 
 ## Installation
 
-**Node.js 14.0.0 or newer is required.**  
+**Node.js 16.11.0 or newer is required.**  
 
 ```shell
-npm i discord.js-embed-menu --save
+npm i @novelbrasil/discord.js-embed-menu --save
+```
+```shell
+pnpm add @novelbrasil/discord.js-embed-menu
 ```
 
 ## Example usage
+
+# General Use (Reaction Example)
 
 ```js
 /* Import all the usual stuff. */
@@ -150,49 +154,16 @@ client.on('message', message => {
 client.login("Get your bot's oauth token at https://discord.com/developers/applications");
 ```
 
+# Button Component Example
+
 ```js
 /* ... */
-    const menu = new DiscordEmbedMenu(interaction, [
-        {
-            name: `main`,
-            content: new EmbedBuilder({
-            title: `Main menu`,
-            description: `Please chose an action`,
-                fields: [
-                    {
-                        name: `📝 Sub menu`,
-                        value: `Goes to another menu.`,
-                        inline: false
-                    },
-                    {
-                        name: `❌ Close`,
-                        value: `Close the menu.`,
-                        inline: false
-                    }
-                ]
-            }),
-            buttons: {
-                submenu: {
-                    action: `submenu`,
-                    button: new ButtonBuilder().setCustomId(`submenu`)
-                        .setLabel(`Sub Menu`)
-                        .setEmoji(`📝`)
-                        .setStyle(ButtonStyle.Primary)
-                },
-                delete: {
-                    action: `delete`,
-                    button: new ButtonBuilder().setCustomId(`delete`)
-                        .setLabel(`Close`)
-                        .setEmoji(`❌`)
-                        .setStyle(ButtonStyle.Danger)
-                }
-            },
-        },
-        {
-            name: `submenu`,
-            content: new EmbedBuilder({
-            title: `Sub menu`,
-            description: `Please chose an action`,
+const menu = new DiscordEmbedMenu(interaction, [
+    {
+        name: `main`,
+        content: new EmbedBuilder({
+        title: `Main menu`,
+        description: `Please chose an action`,
             fields: [
                 {
                     name: `📝 Sub menu`,
@@ -207,27 +178,63 @@ client.login("Get your bot's oauth token at https://discord.com/developers/appli
             ]
         }),
         buttons: {
-            main: {
-                action: `main`,
-                button: new ButtonBuilder().setCustomId(`main`)
-                        .setLabel(`Back`)
-                        .setEmoji(`⬅️`)
-                        .setStyle(ButtonStyle.Primary)
-                },
+            submenu: {
+                action: `submenu`,
+                button: new ButtonBuilder().setCustomId(`submenu`)
+                    .setLabel(`Sub Menu`)
+                    .setEmoji(`📝`)
+                    .setStyle(ButtonStyle.Primary)
+            },
             delete: {
                 action: `delete`,
                 button: new ButtonBuilder().setCustomId(`delete`)
-                        .setLabel(`Close`)
-                        .setEmoji(`❌`)
-                        .setStyle(ButtonStyle.Danger)
-                }
-            },
+                    .setLabel(`Close`)
+                    .setEmoji(`❌`)
+                    .setStyle(ButtonStyle.Danger)
+            }
         },
-    ]);
+    },
+    {
+        name: `submenu`,
+        content: new EmbedBuilder({
+        title: `Sub menu`,
+        description: `Please chose an action`,
+        fields: [
+            {
+                name: `📝 Sub menu`,
+                value: `Goes to another menu.`,
+                inline: false
+            },
+            {
+                name: `❌ Close`,
+                value: `Close the menu.`,
+                inline: false
+            }
+        ]
+    }),
+    buttons: {
+        main: {
+            action: `main`,
+            button: new ButtonBuilder().setCustomId(`main`)
+                    .setLabel(`Back`)
+                    .setEmoji(`⬅️`)
+                    .setStyle(ButtonStyle.Primary)
+            },
+        delete: {
+            action: `delete`,
+            button: new ButtonBuilder().setCustomId(`delete`)
+                    .setLabel(`Close`)
+                    .setEmoji(`❌`)
+                    .setStyle(ButtonStyle.Danger)
+            }
+        },
+    },
+]);
 
-    /* Run Menu.start() when you're ready to send the menu. */
-    menu.start({ followUp: true });
-}
+/* Run Menu.start() when you're ready to send the menu. */
+/* Options: send, followUp, reply */
+/* Choose only one option */
+menu.start({ followUp: true });
 
 /* ... */
 ```
@@ -254,4 +261,4 @@ Before creating an issue, please ensure that it hasn't already been reported/sug
 ## Links
 
 - [discord.js](https://github.com/discordjs/discord.js)
-- [discord.js-menu](https://github.com/jowsey/discord.js-menu)
+- [discord.js-menu](https://github.com/eilex/discord.js-embed-menu)
