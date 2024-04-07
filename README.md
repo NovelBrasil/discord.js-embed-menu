@@ -150,6 +150,88 @@ client.on('message', message => {
 client.login("Get your bot's oauth token at https://discord.com/developers/applications");
 ```
 
+```js
+/* ... */
+    const menu = new DiscordEmbedMenu(interaction, [
+        {
+            name: `main`,
+            content: new EmbedBuilder({
+            title: `Main menu`,
+            description: `Please chose an action`,
+                fields: [
+                    {
+                        name: `📝 Sub menu`,
+                        value: `Goes to another menu.`,
+                        inline: false
+                    },
+                    {
+                        name: `❌ Close`,
+                        value: `Close the menu.`,
+                        inline: false
+                    }
+                ]
+            }),
+            buttons: {
+                submenu: {
+                    action: `submenu`,
+                    button: new ButtonBuilder().setCustomId(`submenu`)
+                        .setLabel(`Sub Menu`)
+                        .setEmoji(`📝`)
+                        .setStyle(ButtonStyle.Primary)
+                },
+                delete: {
+                    action: `delete`,
+                    button: new ButtonBuilder().setCustomId(`delete`)
+                        .setLabel(`Close`)
+                        .setEmoji(`❌`)
+                        .setStyle(ButtonStyle.Danger)
+                }
+            },
+        },
+        {
+            name: `submenu`,
+            content: new EmbedBuilder({
+            title: `Sub menu`,
+            description: `Please chose an action`,
+            fields: [
+                {
+                    name: `📝 Sub menu`,
+                    value: `Goes to another menu.`,
+                    inline: false
+                },
+                {
+                    name: `❌ Close`,
+                    value: `Close the menu.`,
+                    inline: false
+                }
+            ]
+        }),
+        buttons: {
+            main: {
+                action: `main`,
+                button: new ButtonBuilder().setCustomId(`main`)
+                        .setLabel(`Back`)
+                        .setEmoji(`⬅️`)
+                        .setStyle(ButtonStyle.Primary)
+                },
+            delete: {
+                action: `delete`,
+                button: new ButtonBuilder().setCustomId(`delete`)
+                        .setLabel(`Close`)
+                        .setEmoji(`❌`)
+                        .setStyle(ButtonStyle.Danger)
+                }
+            },
+        },
+    ]);
+
+    /* Run Menu.start() when you're ready to send the menu. */
+    menu.start({ followUp: true });
+}
+
+/* ... */
+```
+
 ## Special Destinations
 
 Discord.js-embed-menu comes with 6 pre-defined destinations with specific uses.

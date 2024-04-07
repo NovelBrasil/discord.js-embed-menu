@@ -1,7 +1,7 @@
 {
   "name": "@novelbrasil/discord.js-embed-menu",
   "description": "Easily create Discord.js embed menus with reactions and unlimited customisable pages.",
-  "version": "1.0.4",
+  "version": "1.2.5",
   "author": "eilex",
   "license": "MIT",
   "main": "dist/main.js",
@@ -9,8 +9,7 @@
   "scripts": {
     "test": "npm run build && node dist/test",
     "build": "npx tsc",
-    "build:doc": "npx typedoc",
-    "prepublish": "npm run build && npm run build:doc"
+    "prepublish": "npm run build"
   },
   "repository": {
     "type": "git",

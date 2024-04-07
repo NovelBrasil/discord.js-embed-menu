@@ -1,14 +1,29 @@
 import { EventEmitter } from 'events';
-import { TextChannel, User, Message, EmbedBuilder, PermissionsString, MessageReaction, ReactionCollector, Collection, ChannelType } from 'discord.js';
+import { TextChannel, User, Message, EmbedBuilder, PermissionsString, MessageReaction, ReactionCollector, Collection, ChannelType, ButtonBuilder, BaseInteraction, TextBasedChannel, CommandInteraction, InteractionResponse, ActionRowBuilder, ComponentType, InteractionCollector, ButtonInteraction, MessageComponentInteraction } from 'discord.js';
 
-import { DiscordEmbedMenuPage } from './discord_embed_menu_page';
+import { ButtonType, DiscordEmbedMenuPage } from './discord_embed_menu_page';
+
+type DiscordEmbedMenuType = {
+    name: string,
+    content: EmbedBuilder,
+    reactions: { [key: string]: string },
+    buttons?: Record<string, ButtonType>
+    index: number
+}
+
+type StartOptions = {
+    send: boolean,
+    followUp: boolean,
+    reply: boolean
+}
 
 export class DiscordEmbedMenu extends EventEmitter {
 
     private static readonly REQUIRED_PERMS: PermissionsString[] = ['SendMessages', 'EmbedLinks', 'AddReactions', 'ManageMessages'];
     private static LOADING_MESSAGE: string = 'Carregando, por favor seja paciente...';
 
-    public channel: TextChannel;
+    public interaction: CommandInteraction;
+    public channel: TextBasedChannel;
     public user: User;
     public pages: any[];
     public timeout: number;
@@ -23,68 +38,48 @@ export class DiscordEmbedMenu extends EventEmitter {
     public currentPage: DiscordEmbedMenuPage;
     public pageIndex: number;
 
-    public menu: Message | null = null;
+    public menu: Message | InteractionResponse | null = null;
     public reactionCollector: ReactionCollector | null = null;
+    public componentCollector: MessageComponentInteraction | null = null;
 
     public data: any = {};
 
-    public constructor(channel: TextChannel, user: User, pages: (any | DiscordEmbedMenuPage)[], timeout: number = 300000, deleteOnTimeout: boolean = true, mention: boolean = true, keepUserReactionOnStop: boolean = true, loadingMessage?: string) {
+    public constructor(interaction: BaseInteraction, pages: (DiscordEmbedMenuType | DiscordEmbedMenuPage)[], timeout: number = 300000, deleteOnTimeout: boolean = true, mention: boolean = false, keepUserReactionOnStop: boolean = true, loadingMessage?: string) {
         super();
-        this.channel = channel;
-        this.user = user;
+        this.interaction = interaction as CommandInteraction;
+        this.channel = interaction.channel as TextBasedChannel;
+        this.user = interaction.user;
         this.timeout = timeout;
         this.deleteOnTimeout = deleteOnTimeout;
         this.mention = mention;
         this.keepUserReactionOnStop = keepUserReactionOnStop;
-        this.loadingMessage = loadingMessage ? loadingMessage : DiscordEmbedMenu.LOADING_MESSAGE;
+        this.loadingMessage = loadingMessage || DiscordEmbedMenu.LOADING_MESSAGE;
 
-        this.isDM = !this.channel || this.channel.type !== ChannelType.GuildText;
+        this.isDM = !this.channel || this.channel.isDMBased();
         this.userTag = '<@' + this.user.id + '>';
 
         this.pages = [];
         for (let i = 0, l = pages.length; i < l; i++) {
             let page = pages[i];
-            this.pages.push(page instanceof DiscordEmbedMenuPage ? page : new DiscordEmbedMenuPage(page.name, page.content, page.reactions, i));
+            this.pages.push(page instanceof DiscordEmbedMenuPage ? page : new DiscordEmbedMenuPage(page.name, page.content, page.reactions, i, page.buttons));
         }
         this.currentPage = this.pages[0];
         this.pageIndex = 0;
-
-        if (!this.isDM) {
-            if (this.channel.client.user) {
-                let missingPerms: PermissionsString[] = [];
-                let clientPermissions = this.channel.permissionsFor(this.channel.client.user);
-                if (clientPermissions) {
-                    if (!clientPermissions.has('Administrator')) {
-                        DiscordEmbedMenu.REQUIRED_PERMS.forEach((permission) => {
-                            if (!clientPermissions || clientPermissions.has(permission)) {
-                                missingPerms.push(permission);
-                            }
-                        });
-                    }
-                    if (missingPerms.length > 0) {
-                        console.log(`\x1B[96m[discord.js-embed-menu]\x1B[0m Looks like you're missing ${missingPerms.join(', ')} in #${this.channel.name} (${this.channel.guild.name}). This perms are needed for basic menu operation. You'll probably experience problems sending menus in this channel.`);
-                    }
-                } else {
-                    console.log('\x1B[96m[discord.js-embed-menu]\x1B[0m Something went wrong while checking BOT permissions.');
-                }
-            } else {
-                console.log('\x1B[96m[discord.js-embed-menu]\x1B[0m Something went wrong while checking BOT permissions.');
-            }
-        }
     }
 
-    public async start(): Promise<void> {
-        return this.setPage(0);
+    public async start(options: StartOptions): Promise<void> {
+        return await this.setPage(0, options);
     }
 
     public async stop(): Promise<void | Message> {
         this.stopReactions(false);
         if (this.menu && this.keepUserReactionOnStop) {
-            this.menu.reactions.cache.forEach(async (reaction: MessageReaction) => {
-                if (this.menu && this.menu.client && this.menu.client.user) {
-                    await reaction.users.remove(this.menu.client.user.id);
-                }
-            });
+            if (this.menu instanceof Message)
+                this.menu.reactions.cache.forEach(async (reaction: MessageReaction) => {
+                    if (this.menu && this.menu.client && this.menu.client.user) {
+                        await reaction.users.remove(this.menu.client.user.id);
+                    }
+                });
         } else if (!this.isDM) {
             return await this.clearReactions();
         }
@@ -98,12 +93,12 @@ export class DiscordEmbedMenu extends EventEmitter {
     }
 
     private async clearReactions(): Promise<void | Message> {
-        if (this.menu && !this.isDM) {
+        if (this.menu && !this.isDM && this.menu instanceof Message) {
             return this.menu.reactions.removeAll();
         }
     }
 
-    public async setPage(page: number | string = 0): Promise<void> {
+    public async setPage(page: number | string = 0, options?: StartOptions): Promise<void> {
 
         if (typeof(page) === 'string') {
             let pageIndex = this.pages.findIndex(p => p.name === page);
@@ -138,24 +133,47 @@ export class DiscordEmbedMenu extends EventEmitter {
             }
         } else {
             if (this.menu) {
-                await this.menu.edit({ content, embeds: [loadingEmbed] });
+                await this.menu.edit({ content, embeds: [loadingEmbed], components: [] });
             } else {
-                this.menu = await this.channel.send({ content, embeds: [loadingEmbed] });
+                if (options?.reply)
+                    this.menu = await this.interaction.reply({ content, embeds: [loadingEmbed], components: [] });
+                else if (options?.followUp)
+                    this.menu = await this.interaction.followUp({ content, embeds: [loadingEmbed], components: [] });
+                else this.menu = await this.channel.send({ content, embeds: [loadingEmbed], components: [] });
             }
         }
 
-        this.stopReactions(true);
-        await this.addReactions();
-        this.awaitReactions();
+        if (this.currentPage.reactions) {
+            this.stopReactions(true);
+            await this.addReactions();
+            this.awaitReactions();
+        }
 
-        await this.menu.edit({content, embeds: [this.currentPage.content] });
+        const components: ActionRowBuilder<ButtonBuilder>[] = [];
+        if (this.currentPage.buttons) {
+            const buttons = this.currentPage.buttons as Record<string, ButtonType>
+            for (let i = 0; i < Object.keys(buttons).length; i++)
+                if (i % 5 == 0)
+                    components.push(new ActionRowBuilder<ButtonBuilder>())
+            for (const row of components) {
+                for (const button of Object.values(buttons)) {
+                    row.addComponents(button.button)
+                }
+            }
+        }
+
+        this.menu = await this.menu.edit({content, embeds: [this.currentPage.content], components });
+
+        if (this.currentPage.buttons) {
+            await this.awaitButtons()
+        }
 
         this.emit('page-changed', this.pageIndex, this.currentPage);
     }
 
     private async addReactions(): Promise<MessageReaction[]> {
         let reactions: MessageReaction[] = [];
-        if (this.menu) {
+        if (this.menu && this.menu instanceof Message) {
             for (let reaction in this.currentPage.reactions) {
                 reactions.push(await this.menu.react(reaction));
             }
@@ -173,8 +191,70 @@ export class DiscordEmbedMenu extends EventEmitter {
         }
     }
 
+    private async awaitButtons() {
+        if (this.menu && this.menu instanceof Message) {
+            const filter = (_interaction: any): boolean => {
+                return _interaction.user.id === this.user.id
+            }
+            try {
+                const component = await this.menu.awaitMessageComponent({ filter, time: this.timeout, componentType: ComponentType.Button })
+                if (!component) return
+                component.deferUpdate()
+
+                const key = Object.prototype.hasOwnProperty.call(this.currentPage.buttons, component.customId as string)
+                    ? component.customId
+                    : Object.prototype.hasOwnProperty.call(this.currentPage.buttons, component.id as string) ? component.id : null;
+                if (key && this.menu && this.menu instanceof Message) {
+                    if (component.user.id !== this.user.id) return
+                    if (!this.currentPage.buttons) return
+                    if (typeof this.currentPage.buttons[key].action !== 'string') {
+                        this.currentPage.buttons[key].action(this);
+                    }
+                    switch (this.currentPage.buttons[key].action) {
+                        case "first":
+                            this.setPage(0);
+                            break
+                        case "last":
+                            this.setPage(this.pages.length - 1);
+                            break
+                        case 'previous': {
+                            if (this.pageIndex > 0) {
+                                this.setPage(this.pageIndex - 1);
+                            }
+                            break;
+                        }
+                        case 'next': {
+                            if (this.pageIndex < this.pages.length - 1) {
+                                this.setPage(this.pageIndex + 1);
+                            }
+                            break;
+                        }
+                        case 'delete': {
+                            this.delete()
+                            break
+                        }
+                        default: {
+                            this.setPage(
+                                this.pages.findIndex(p => this.currentPage.buttons &&  p.name === this.currentPage.buttons[key].action)
+                            );
+                            break;
+                        }
+                    }
+                }
+            } catch (error) {
+                if (!this.isDM) {
+                    if (this.deleteOnTimeout) {
+                        this.delete();
+                    } else {
+                        await this.menu?.edit({ components: [] });
+                    }
+                }
+            }
+        }
+    }
+
     private awaitReactions() {
-        if (this.menu) {
+        if (this.menu && this.menu instanceof Message) {
             const filter = (_reaction: MessageReaction, user: User): boolean => {
                 return this.menu != null && this.menu.client != null && this.menu.client.user != null && user.id != this.menu.client.user.id;
             }
@@ -206,7 +286,7 @@ export class DiscordEmbedMenu extends EventEmitter {
                     return reaction.users.remove(user);
                 }
     
-                if (reactionName && this.menu) {
+                if (reactionName && this.menu && this.menu instanceof Message) {
                     if (typeof this.currentPage.reactions[reactionName] === 'function') {
                         // this this flag is not true then the clearReaction() at ligne 188 will be never call when try to change page
                         // also test when no page change it works too
