@@ -2,10 +2,6 @@
   <p>
     <a href="https://github.com/NovelBrasil/discord.js-embed-menu"><img src="https://img.shields.io/npm/v/@novelbrasil/discord.js-embed-menu" alt="NPM version" /></a>
     <a href="https://discord.js.org"><img src="https://img.shields.io/npm/dependency-version/@novelbrasil/discord.js-embed-menu/discord.js" alt="NPM (prod) dependency version" /></a>
-    
-  </p>
-  <p>
-    <a href="https://nodei.co/npm/@novelbrasil/discord.js-embed-menu/"><img src="https://nodei.co/npm/@novelbrasil/discord.js-embed-menu?downloads=true&stars=true" alt="npm installnfo" /></a>
   </p>
 </div>
 
@@ -43,12 +39,12 @@ pnpm add @novelbrasil/discord.js-embed-menu
 
 ## Example usage
 
-# General Use (Reaction Example)
+### General Use (Reaction Example)
 
 ```js
 /* Import all the usual stuff. */
 import { Client, MessageEmbed } from 'discord.js';
-import { DiscordEmbedMenu } from 'discord.js-embed-menu';
+import { DiscordEmbedMenu } from '@novelbrasil/discord.js-embed-menu';
 
 const client = new Client();
 
@@ -154,7 +150,7 @@ client.on('message', message => {
 client.login("Get your bot's oauth token at https://discord.com/developers/applications");
 ```
 
-# Button Component Example
+### Button Component Example
 
 ```js
 /* ... */
